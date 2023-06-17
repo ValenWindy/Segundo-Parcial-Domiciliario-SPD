@@ -1,0 +1,121 @@
+#include <IRremote.h>
+#include <Wire.h>
+#include <LiquidCrystal.h>
+#include <Servo.h>
+
+#define PIN_IR 13
+#define CODIGO_ACTIVAR 0x20DF10EF
+#define CODIGO_DESACTIVAR 0x20DFC03F
+
+#define TEMP_MIN_PRIMAVERA 10
+#define TEMP_MAX_PRIMAVERA 25
+#define TEMP_MIN_VERANO 25
+#define TEMP_MAX_VERANO 40
+#define TEMP_MIN_OTONO 10
+#define TEMP_MAX_OTONO 25
+#define TEMP_MIN_INVIERNO -5
+#define TEMP_MAX_INVIERNO 10
+
+#define PIN_SERVO 12
+#define ANGULO_MIN 0
+#define ANGULO_MAX 180
+
+#define PIN_LED1 11
+#define PIN_LED2 10
+
+IRrecv receptorIR(PIN_IR);
+decode_results resultadosIR;
+
+LiquidCrystal lcd(9, 8, 7, 6, 5, 4); // Pines RS, E, D4, D5, D6, D7
+
+Servo motorServo;
+
+void setup() {
+  Serial.begin(9600);
+  receptorIR.enableIRIn();
+  lcd.begin(16, 2); // Inicializar el LCD con 16 columnas y 2 filas
+  lcd.clear(); // Limpiar el LCD
+  lcd.print("Temp:");
+  lcd.setCursor(0, 1);
+  lcd.print("Estacion:");
+  motorServo.attach(PIN_SERVO);
+  pinMode(PIN_LED1, OUTPUT);
+  pinMode(PIN_LED2, OUTPUT);
+}
+
+void loop() {
+  float temperatura = leerTemperatura();
+  String estacion = determinarEstacion(temperatura);
+  mostrarInformacionLCD(temperatura, estacion);
+  verificarComandoIR();
+  verificarIncendio(temperatura);
+  delay(500);
+}
+
+float leerTemperatura() {
+  int valorSensor = analogRead(A0);
+  float voltaje = valorSensor * (5.0 / 1023.0);
+  float temperatura = (voltaje - 0.5) * 100;
+  return temperatura;
+}
+
+String determinarEstacion(float temperatura) {
+  if (temperatura >= TEMP_MIN_PRIMAVERA && temperatura <= TEMP_MAX_PRIMAVERA) {
+    return "Primavera";
+  } else if (temperatura >= TEMP_MIN_VERANO && temperatura <= TEMP_MAX_VERANO) {
+    return "Verano";
+  } else if (temperatura >= TEMP_MIN_OTONO && temperatura <= TEMP_MAX_OTONO) {
+    return "Otoño";
+  } else if (temperatura >= TEMP_MIN_INVIERNO && temperatura <= TEMP_MAX_INVIERNO) {
+    return "Invierno";
+  } else {
+    return "Desconocida";
+  }
+}
+
+void mostrarInformacionLCD(float temperatura, String estacion) {
+  lcd.setCursor(0, 0);
+  lcd.print("Temp: ");
+  lcd.print(temperatura);
+  lcd.print(" C");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Estacion: ");
+  lcd.print(estacion);
+}
+
+void verificarComandoIR() {
+  if (receptorIR.decode(&resultadosIR)) {
+    unsigned long codigoIR = resultadosIR.value;
+
+    if (codigoIR == CODIGO_ACTIVAR) {
+      activarSistemaIncendio();
+    }
+
+    if (codigoIR == CODIGO_DESACTIVAR) {
+      desactivarSistemaIncendio();
+    }
+
+    receptorIR.resume();
+  }
+}
+
+void verificarIncendio(float temperatura) {
+  if (temperatura > 60) {
+    activarSistemaIncendio();
+  } else {
+    desactivarSistemaIncendio();
+  }
+}
+
+void activarSistemaIncendio() {
+  motorServo.write(ANGULO_MAX);
+  digitalWrite(PIN_LED1, HIGH);
+  digitalWrite(PIN_LED2, HIGH);
+}
+
+void desactivarSistemaIncendio() {
+  motorServo.write(ANGULO_MIN);
+  digitalWrite(PIN_LED1, LOW);
+  digitalWrite(PIN_LED2, LOW);
+}
